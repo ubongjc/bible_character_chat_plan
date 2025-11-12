@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
+import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import sensible from '@fastify/sensible';
 import swagger from '@fastify/swagger';
@@ -10,6 +11,7 @@ import jwt from '@fastify/jwt';
 import { config } from './config/index.js';
 import { db } from './db/client.js';
 import { redis } from './db/redis.js';
+import { securityHeaders, requestId } from './middleware/security.js';
 import { authRoutes } from './routes/auth.js';
 import { charactersRoutes } from './routes/characters.js';
 import { threadsRoutes } from './routes/threads.js';
@@ -17,6 +19,8 @@ import { chatRoutes } from './routes/chat.js';
 import { callsRoutes } from './routes/calls.js';
 import { sourcesRoutes } from './routes/sources.js';
 import { adminRoutes } from './routes/admin.js';
+import { bookmarksRoutes } from './routes/bookmarks.js';
+import { subscriptionsRoutes } from './routes/subscriptions.js';
 
 const fastify = Fastify({
   logger: {
@@ -26,7 +30,16 @@ const fastify = Fastify({
 
 async function start() {
   try {
+    // Security middleware
+    fastify.addHook('onRequest', securityHeaders);
+    fastify.addHook('onRequest', requestId);
+
     // Register plugins
+    await fastify.register(cookie, {
+      secret: config.jwtSecret,
+      parseOptions: {},
+    });
+
     await fastify.register(helmet, {
       contentSecurityPolicy: {
         directives: {
@@ -34,6 +47,7 @@ async function start() {
           styleSrc: ["'self'", "'unsafe-inline'"],
           scriptSrc: ["'self'"],
           imgSrc: ["'self'", 'data:', 'https:'],
+          connectSrc: ["'self'", 'https://api.openai.com'],
         },
       },
     });
@@ -110,6 +124,8 @@ async function start() {
     await fastify.register(chatRoutes, { prefix: '/api/chat' });
     await fastify.register(callsRoutes, { prefix: '/api/calls' });
     await fastify.register(sourcesRoutes, { prefix: '/api/sources' });
+    await fastify.register(bookmarksRoutes, { prefix: '/api/bookmarks' });
+    await fastify.register(subscriptionsRoutes, { prefix: '/api/subscriptions' });
     await fastify.register(adminRoutes, { prefix: '/api/admin' });
 
     // Start server
